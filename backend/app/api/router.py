@@ -12,6 +12,7 @@ from app.schemas.schemas import (
     OccupancySeg,
     OrderOut,
     PickupRequest,
+    RailMaintenanceIn,
     RailOut,
     StoreOut,
 )
@@ -33,6 +34,17 @@ def stores(db: Session = Depends(get_db)):
 @api_router.get("/rails", response_model=list[RailOut])
 def rails(db: Session = Depends(get_db)):
     return db.scalars(select(HangRail).order_by(HangRail.id)).all()
+
+
+@api_router.post("/rails/{rail_id}/maintenance", response_model=RailOut)
+def set_rail_maintenance(rail_id: int, body: RailMaintenanceIn, db: Session = Depends(get_db)):
+    rail = db.get(HangRail, rail_id)
+    if not rail:
+        raise HTTPException(404, "挂杆不存在")
+    rail.maintenance = 1 if body.maintenance else 0
+    db.commit()
+    db.refresh(rail)
+    return rail
 
 
 @api_router.get("/orders", response_model=list[OrderOut])
@@ -81,6 +93,8 @@ def hang(body: HangRequest, db: Session = Depends(get_db)):
         raise HTTPException(404, "无可用挂杆")
 
     for rail in rails:
+        if rail.maintenance:
+            continue  # 检修封锁：扫描时直接跳过，已在杆上的衣物仍可取件
         active = db.scalars(
             select(RailPlacement).where(RailPlacement.rail_id == rail.id, RailPlacement.active == 1)
         ).all()
@@ -102,6 +116,8 @@ def hang(body: HangRequest, db: Session = Depends(get_db)):
         db.refresh(order)
         return order
 
+    if all(r.maintenance for r in rails):
+        raise HTTPException(409, "挂杆检修封锁中，暂不可上杆")
     raise HTTPException(409, "挂杆空间不足")
 
 

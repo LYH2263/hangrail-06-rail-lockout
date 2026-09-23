@@ -253,6 +253,15 @@ button {
 .mono { font-family: "IBM Plex Mono", monospace; }
 .err { color: #ff9b7a; } .ok { color: #d4c08a; }
 
+.badge-maint, .badge-ok {
+  display: inline-block; padding: .15rem .55rem; border-radius: 999px;
+  font-size: .75rem; font-weight: 700; border: 1px solid transparent;
+}
+.badge-maint { background: #3a1810; border-color: #a05040; color: #ffb0a0; }
+.badge-ok { background: transparent; border-color: var(--line); color: var(--hang-muted); }
+.row-locked { opacity: .62; }
+.row-locked td:first-child::before { content: "🔧 "; }
+
 .ruler-wrap {
   background: transparent;
   border: none;

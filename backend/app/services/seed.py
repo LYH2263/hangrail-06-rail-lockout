@@ -12,7 +12,7 @@ def seed_if_empty(db: Session) -> None:
     store = Store(name="清风干洗 · 滨江店")
     db.add(store)
     db.flush()
-    r1 = HangRail(store_id=store.id, label="A 杆", length_cm=200)
+    r1 = HangRail(store_id=store.id, label="A 杆", length_cm=200, maintenance=1)
     r2 = HangRail(store_id=store.id, label="B 杆", length_cm=160)
     db.add_all([r1, r2])
     db.flush()

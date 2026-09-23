@@ -13,7 +13,12 @@ class RailOut(BaseModel):
     store_id: int
     label: str
     length_cm: float
+    maintenance: bool
     model_config = {"from_attributes": True}
+
+
+class RailMaintenanceIn(BaseModel):
+    maintenance: bool
 
 
 class OrderOut(BaseModel):
