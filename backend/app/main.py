@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 
 from app.api.router import api_router
 from app.config import settings
@@ -9,9 +10,21 @@ from app.database import Base, SessionLocal, engine
 from app.services.seed import seed_if_empty
 
 
+def _ensure_columns() -> None:
+    """Idempotent lightweight migration for columns added after first deploy."""
+    insp = inspect(engine)
+    if "hang_rails" not in insp.get_table_names():
+        return
+    cols = {c["name"] for c in insp.get_columns("hang_rails")}
+    with engine.begin() as conn:
+        if "blocked" not in cols:
+            conn.execute(text("ALTER TABLE hang_rails ADD COLUMN blocked INTEGER DEFAULT 0"))
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    _ensure_columns()
     if settings.seed_on_empty:
         db = SessionLocal()
         try:

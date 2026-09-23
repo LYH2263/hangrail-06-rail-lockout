@@ -12,10 +12,11 @@ from app.schemas.schemas import (
     OccupancySeg,
     OrderOut,
     PickupRequest,
+    RailBlockRequest,
     RailOut,
     StoreOut,
 )
-from app.services.rail_engine import Segment, first_fit
+from app.services.rail_engine import RailCandidate, choose_rail, Segment
 
 api_router = APIRouter()
 
@@ -33,6 +34,17 @@ def stores(db: Session = Depends(get_db)):
 @api_router.get("/rails", response_model=list[RailOut])
 def rails(db: Session = Depends(get_db)):
     return db.scalars(select(HangRail).order_by(HangRail.id)).all()
+
+
+@api_router.patch("/rails/{rail_id}/block", response_model=RailOut)
+def set_rail_blocked(rail_id: int, body: RailBlockRequest, db: Session = Depends(get_db)):
+    rail = db.get(HangRail, rail_id)
+    if not rail:
+        raise HTTPException(404, "挂杆不存在")
+    rail.blocked = 1 if body.blocked else 0
+    db.commit()
+    db.refresh(rail)
+    return rail
 
 
 @api_router.get("/orders", response_model=list[OrderOut])
@@ -80,29 +92,39 @@ def hang(body: HangRequest, db: Session = Depends(get_db)):
     if not rails:
         raise HTTPException(404, "无可用挂杆")
 
+    # 检修封锁杆直接跳过：任何工单都不得新上到该杆
+    if body.rail_id and rails[0].blocked:
+        raise HTTPException(409, f"{rails[0].label}检修封锁中，暂不可上杆")
+
+    candidates: list[RailCandidate] = []
     for rail in rails:
         active = db.scalars(
             select(RailPlacement).where(RailPlacement.rail_id == rail.id, RailPlacement.active == 1)
         ).all()
         occupied = [Segment(p.start_cm, p.end_cm) for p in active]
-        place = first_fit(rail.length_cm, occupied, order.length_cm)
-        if place is None:
-            continue
-        db.add(
-            RailPlacement(
-                rail_id=rail.id,
-                order_id=order.id,
-                start_cm=place.start_cm,
-                end_cm=place.end_cm,
-            )
+        candidates.append(
+            RailCandidate(rail_id=rail.id, length_cm=rail.length_cm, occupied=occupied, blocked=bool(rail.blocked))
         )
-        order.status = "hung"
-        order.hung_at = datetime.utcnow()
-        db.commit()
-        db.refresh(order)
-        return order
 
-    raise HTTPException(409, "挂杆空间不足")
+    chosen = choose_rail(candidates, order.length_cm)
+    if chosen is None:
+        if all(c.blocked for c in candidates):
+            raise HTTPException(409, "门店挂杆均在检修封锁中，暂无可上杆挂位")
+        raise HTTPException(409, "挂杆空间不足")
+    rail_id, place = chosen
+    db.add(
+        RailPlacement(
+            rail_id=rail_id,
+            order_id=order.id,
+            start_cm=place.start_cm,
+            end_cm=place.end_cm,
+        )
+    )
+    order.status = "hung"
+    order.hung_at = datetime.utcnow()
+    db.commit()
+    db.refresh(order)
+    return order
 
 
 @api_router.post("/pickup", response_model=OrderOut)

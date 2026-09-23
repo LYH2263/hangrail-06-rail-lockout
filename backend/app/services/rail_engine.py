@@ -21,6 +21,20 @@ class Placement:
     end_cm: float
 
 
+@dataclass(frozen=True)
+class RailCandidate:
+    """A rail offered to first-fit allocation.
+
+    blocked marks a rail under maintenance: it is never selected for new
+    hangings, regardless of free space.
+    """
+
+    rail_id: int
+    length_cm: float
+    occupied: list[Segment]
+    blocked: bool = False
+
+
 def free_gaps(rail_length: float, occupied: list[Segment]) -> list[Segment]:
     occ = sorted(occupied, key=lambda s: s.start_cm)
     gaps: list[Segment] = []
@@ -40,6 +54,17 @@ def first_fit(rail_length: float, occupied: list[Segment], garment_cm: float) ->
     for gap in free_gaps(rail_length, occupied):
         if gap.length + 1e-9 >= garment_cm:
             return Placement(gap.start_cm, gap.start_cm + garment_cm)
+    return None
+
+
+def choose_rail(candidates: list[RailCandidate], garment_cm: float) -> tuple[int, Placement] | None:
+    """First-Fit across rails, in the given order, skipping blocked rails."""
+    for cand in candidates:
+        if cand.blocked:
+            continue
+        place = first_fit(cand.length_cm, cand.occupied, garment_cm)
+        if place is not None:
+            return cand.rail_id, place
     return None
 
 

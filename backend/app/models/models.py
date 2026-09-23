@@ -19,6 +19,8 @@ class HangRail(Base):
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"))
     label: Mapped[str] = mapped_column(String(40))
     length_cm: Mapped[float] = mapped_column(Float)
+    # 检修封锁：1 = 检修中，禁止新工单上杆；已挂衣物仍可取件
+    blocked: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     store: Mapped[Store] = relationship(back_populates="rails")
     placements: Mapped[list["RailPlacement"]] = relationship(back_populates="rail")
 

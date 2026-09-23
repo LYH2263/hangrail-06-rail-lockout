@@ -13,7 +13,12 @@ class RailOut(BaseModel):
     store_id: int
     label: str
     length_cm: float
+    blocked: bool = False
     model_config = {"from_attributes": True}
+
+
+class RailBlockRequest(BaseModel):
+    blocked: bool
 
 
 class OrderOut(BaseModel):
